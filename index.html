@@ -238,7 +238,7 @@ async function pkce() {
 
 async function signIn() {
   const { verifier, challenge } = await pkce();
-  sessionStorage.setItem('pkce_verifier', verifier);
+  localStorage.setItem('pkce_verifier', verifier);
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
     response_type: 'code',
@@ -249,12 +249,12 @@ async function signIn() {
     code_challenge_method: 'S256',
     prompt: 'select_account',
   });
-  location.href = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params}`;
+  location.href = `https://login.microsoftonline.com/51a41c2a-3820-458f-b160-efccf08936f4/oauth2/v2.0/authorize?${params}`;
 }
 
 async function exchangeCode(code) {
-  const verifier = sessionStorage.getItem('pkce_verifier');
-  const res = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+  const verifier = localStorage.getItem('pkce_verifier');
+  const res = await fetch('https://login.microsoftonline.com/51a41c2a-3820-458f-b160-efccf08936f4/oauth2/v2.0/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -273,7 +273,7 @@ async function exchangeCode(code) {
 async function refreshAccessToken() {
   const rt = localStorage.getItem('tk_refresh_token');
   if (!rt) throw new Error('No refresh token — please sign in again.');
-  const res = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+  const res = await fetch('https://login.microsoftonline.com/51a41c2a-3820-458f-b160-efccf08936f4/oauth2/v2.0/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -304,7 +304,7 @@ async function getToken() {
 
 function signOut() {
   ['tk_access_token','tk_token_expiry','tk_refresh_token'].forEach(k => localStorage.removeItem(k));
-  location.href = `https://login.microsoftonline.com/common/oauth2/v2.0/logout?post_logout_redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
+  location.href = `https://login.microsoftonline.com/51a41c2a-3820-458f-b160-efccf08936f4/oauth2/v2.0/logout?post_logout_redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
 }
 
 // ── Status storage ───────────────────────────────────────────────────────────
@@ -542,14 +542,30 @@ function escHtml(s) {
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 async function boot() {
-  // Handle OAuth redirect
   const params = new URLSearchParams(location.search);
+
+  // Check for OAuth error response
+  const oauthError = params.get('error');
+  if (oauthError) {
+    const desc = params.get('error_description') || oauthError;
+    history.replaceState({}, '', REDIRECT_URI);
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+    alert('Sign-in error: ' + decodeURIComponent(desc.replace(/\+/g,' ')));
+    return;
+  }
+
+  // Handle auth code
   const code = params.get('code');
   if (code) {
-    history.replaceState({}, '', REDIRECT_URI);
+    // Show loading state on login screen while exchanging
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
     try {
       await exchangeCode(code);
+      history.replaceState({}, '', REDIRECT_URI);
     } catch (err) {
+      history.replaceState({}, '', REDIRECT_URI);
       document.getElementById('login-screen').style.display = 'flex';
       alert('Sign-in failed: ' + err.message);
       return;
